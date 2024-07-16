@@ -204,8 +204,7 @@ pub fn pseudo_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut out
     let base_candidate_scores = names_b.iter().map(|name| {
         CandidateScore::new(name.len() as u8)
     }).collect::<Vec<CandidateScore>>();
-    names_a.par_iter().progress_count(names_a.len() as
-      u64).enumerate().for_each(|(new_a_id, query_name)| {
+    names_a.par_iter().enumerate().for_each(|(new_a_id, query_name)| {
         let query_masks_lookup = maskify(&query_name);
         let query_partial = ((1.0 / query_name.len() as f32) * 1024.0) as u16;
 
@@ -232,8 +231,7 @@ pub fn pseudo_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut out
 #[inline]
 pub fn strsim_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut output_dir: PathBuf, min_jaro_winkler: f32) {
     create_dir_all(&mut output_dir).unwrap();
-    names_a.par_iter().progress_count(names_a.len() as
-      u64).enumerate().for_each(|(i, name_a)| {
+    names_a.par_iter().enumerate().for_each(|(i, name_a)| {
         let mut output_path = output_dir.clone();
         let mut file_name = i.to_string();
         file_name.push_str(".txt");
@@ -251,8 +249,7 @@ pub fn strsim_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut out
 #[inline]
 pub fn rapidfuzz_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut output_dir: PathBuf, min_jaro_winkler: f32) {
     create_dir_all(&mut output_dir).unwrap();
-    names_a.par_iter().progress_count(names_a.len() as
-      u64).enumerate().for_each(|(i, name_a)| {
+    names_a.par_iter().enumerate().for_each(|(i, name_a)| {
         let mut output_path = output_dir.clone();
         let mut file_name = i.to_string();
         file_name.push_str(".txt");
@@ -276,8 +273,7 @@ pub fn rapidfuzz_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut 
 #[inline]
 pub fn eddie_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut output_dir: PathBuf, min_jaro_winkler: f32) {
     create_dir_all(&mut output_dir).unwrap();
-    names_a.par_iter().progress_count(names_a.len() as
-      u64).enumerate().for_each(|(i, name_a)| {
+    names_a.par_iter().enumerate().for_each(|(i, name_a)| {
         let mut output_path = output_dir.clone();
         let mut file_name = i.to_string();
         file_name.push_str(".txt");

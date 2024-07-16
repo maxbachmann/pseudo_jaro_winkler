@@ -15,6 +15,7 @@ use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use std::io::prelude::*;
 use std::fmt;
+use rapidfuzz::distance::jaro_winkler;
 
 /// Information on a single letter for a candidate match.
 #[derive(Debug, Clone)]
@@ -36,7 +37,7 @@ struct CandidateLetterInfo {
 struct CandidateScore {
     /// Tally of the number of matches found
     matches: u8,
-    /// A bitmask of the letters that have already been matched 
+    /// A bitmask of the letters that have already been matched
     used: u16,
     /// A bitmask of the letters that have already been matched in their exact position
     used_exact: u16,
@@ -87,7 +88,7 @@ impl CandidateScore {
 /// that location as long as it is within the minimum distance to be considered a match.
 ///
 /// # Arguments
-/// 
+///
 /// * `query` - the string to turn into a list of bitmasks
 fn maskify(query: &String) -> Vec<(u8, [u16; 16])> {
     let len = query.len();
@@ -115,9 +116,9 @@ fn maskify(query: &String) -> Vec<(u8, [u16; 16])> {
 
 /// Transforms a vector of names into a lookup table.
 /// The lookup table is represented by a vector of vectors. The outer vector always has 27 elements
-/// in it, each one corresponding to the letters [`-z], where '`' is the 0th item, 'a' is 1st item, 
+/// in it, each one corresponding to the letters [`-z], where '`' is the 0th item, 'a' is 1st item,
 /// 'b' is the 2nd item and so on. The inner vector is a list of all the candidates that contain
-/// that letter. 
+/// that letter.
 fn build_candidate_lookup(names: &Vec<String>) -> Vec<Vec<CandidateLetterInfo>> {
     let mut letter_lookup: Vec<Vec<CandidateLetterInfo>> = Vec::new();
     for letter in '`'..'{' {
@@ -174,7 +175,7 @@ fn score_letter(candidate_score: &mut CandidateScore, query_mask: u16, candidate
 ///    to write all matches.
 #[inline]
 pub fn pseudo_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut output_dir: PathBuf, min_jaro_winkler: f32) {
-    let lookup_a_by_name = names_a.iter().enumerate().fold(HashMap::new(), |mut lookup, (i, name)|  { 
+    let lookup_a_by_name = names_a.iter().enumerate().fold(HashMap::new(), |mut lookup, (i, name)|  {
         let entry = lookup.entry(name).or_insert(Vec::new());
         entry.push(i);
         lookup
@@ -186,7 +187,7 @@ pub fn pseudo_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut out
         (i, lookup_a_by_name[name].clone())
     }).collect::<HashMap<_, _>>();
 
-    let lookup_b_by_name = names_b.iter().enumerate().fold(HashMap::new(), |mut lookup, (i, name)|  { 
+    let lookup_b_by_name = names_b.iter().enumerate().fold(HashMap::new(), |mut lookup, (i, name)|  {
         let entry = lookup.entry(name).or_insert(Vec::new());
         entry.push(i);
         lookup
@@ -217,26 +218,12 @@ pub fn pseudo_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut out
              });
         }
         let a_ids = lookup_a_by_new_id.get(&new_a_id).unwrap();
-        let mut a_files = a_ids.iter().map(|a_id| {
-            let mut output_path = output_dir.clone();
-            let mut file_name = a_id.to_string();
-            file_name.push_str(".txt");
-            output_path.push(file_name);
-            BufWriter::with_capacity(100000, File::create(output_path).unwrap())
-        }).collect::<Vec<_>>();
-        candidate_scores.into_iter().enumerate().flat_map(|(score_i, score)| {
+        core::hint::black_box(&candidate_scores.into_iter().enumerate().flat_map(|(score_i, score)| {
             let jw = score.calculate_jaro_winkler(query_partial);
             if jw >= min_jaro_winkler {
                 Some((score_i, jw))
             } else { None}
-        }).for_each(|(score_i, jw)| { 
-            //writeln!(file, "{},{:.2}", score_i, jw).unwrap(); 
-            let b_ids = lookup_b_by_new_id.get(&score_i).unwrap();
-            //writeln!(file, "{}", ids.iter().fold(0_usize, |sum, val| sum + val)).unwrap();
-            a_files.iter_mut().for_each(|file| {
-                b_ids.iter().for_each(|id| { writeln!(file, "{},{:.2}", id, jw).unwrap(); }); 
-            });
-        });
+        }).collect::<Vec<_>>());
     });
 }
 
@@ -251,13 +238,37 @@ pub fn strsim_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut out
         let mut file_name = i.to_string();
         file_name.push_str(".txt");
         output_path.push(file_name);
-        let mut file = BufWriter::with_capacity(100000, File::create(output_path).unwrap());
-        names_b.iter().enumerate().flat_map(|(name_b_i, name_b)| {
+        core::hint::black_box(&names_b.iter().enumerate().flat_map(|(name_b_i, name_b)| {
             let jw = strsim::jaro_winkler(name_a, name_b);
             if jw >= min_jaro_winkler as f64{
                 Some((name_b_i, jw))
             } else { None}
-        }).for_each(|(name_b_i, jw)| { writeln!(file, "{},{:.2}", name_b_i, jw).unwrap(); });
+        }).collect::<Vec<_>>());
+    });
+}
+
+/// Computing jaro winkler using the rapidfuzz library for testing.
+#[inline]
+pub fn rapidfuzz_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut output_dir: PathBuf, min_jaro_winkler: f32) {
+    create_dir_all(&mut output_dir).unwrap();
+    names_a.par_iter().progress_count(names_a.len() as
+      u64).enumerate().for_each(|(i, name_a)| {
+        let mut output_path = output_dir.clone();
+        let mut file_name = i.to_string();
+        file_name.push_str(".txt");
+        output_path.push(file_name);
+
+        let comparator = rapidfuzz::distance::jaro_winkler::BatchComparator::new(name_a.chars());
+        core::hint::black_box(&names_b.iter().enumerate().flat_map(|(name_b_i, name_b)| {
+            let jw = comparator.similarity_with_args(
+                name_b.chars(),
+                &rapidfuzz::distance::jaro_winkler::Args::default().score_cutoff(min_jaro_winkler.into())
+            );
+
+            if let Some(jw) = jw {
+                Some((name_b_i, jw))
+            } else { None}
+        }).collect::<Vec<_>>());
     });
 }
 
@@ -271,14 +282,13 @@ pub fn eddie_jaro_winkler(names_a: &Vec<String>, names_b: &Vec<String>, mut outp
         let mut file_name = i.to_string();
         file_name.push_str(".txt");
         output_path.push(file_name);
-        let mut file = BufWriter::with_capacity(100000, File::create(output_path).unwrap());
         let jaro_winkler = eddie::JaroWinkler::new();
-        names_b.iter().enumerate().flat_map(|(name_b_i, name_b)| {
+        core::hint::black_box(&names_b.iter().enumerate().flat_map(|(name_b_i, name_b)| {
             let jw = jaro_winkler.similarity(name_a, name_b);
             if jw >= min_jaro_winkler as f64{
                 Some((name_b_i, jw))
             } else { None}
-        }).for_each(|(name_b_i, jw)| { writeln!(file, "{},{:.2}", name_b_i, jw).unwrap(); });
+        }).collect::<Vec<_>>());
     });
 }
 
@@ -310,11 +320,11 @@ mod tests {
     }
 
     /// This is a test that makes sure that the average error from calculating psuedo jaro winklers
-    /// does not differ too far from real jaro winkler scores. 
+    /// does not differ too far from real jaro winkler scores.
     ///
-    /// It constrains the average error of comparing 10 names to 100,000 names chosen 
-    /// randomly from 1880 to be no greater than 0.002 with a standard deviation of no greater 
-    /// than 0.01. It also makes sure that errors which are greater than 0.02 are less 
+    /// It constrains the average error of comparing 10 names to 100,000 names chosen
+    /// randomly from 1880 to be no greater than 0.002 with a standard deviation of no greater
+    /// than 0.01. It also makes sure that errors which are greater than 0.02 are less
     /// than 2% of all the winklers calculated.
     #[test]
     fn test_batch() {

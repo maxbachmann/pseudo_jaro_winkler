@@ -532,6 +532,7 @@ dependencies = [
  "format-bytes",
  "indicatif",
  "itertools",
+ "rapidfuzz",
  "rayon",
  "serde",
  "statistical",
@@ -652,6 +653,12 @@ checksum = "cbf7e9e623549b0e21f6e97cf8ecf247c1a8fd2e8a992ae265314300b2455d5c"
 dependencies = [
  "rand_core 0.3.1",
 ]
+
+[[package]]
+name = "rapidfuzz"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "270e04e5ea61d40841942bb15e451c29ee1618637bcf97fc7ede5dd4a9b1601b"
 
 [[package]]
 name = "rayon"

@@ -7,7 +7,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::path::PathBuf;
 use std::time::Duration;
 use serde::{Serialize, Deserialize};
-use pseudo_jaro_winkler::pseudo_jaro_winkler;
+use pseudo_jaro_winkler::{pseudo_jaro_winkler, strsim_jaro_winkler, rapidfuzz_jaro_winkler, eddie_jaro_winkler};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct NameRec {
@@ -34,11 +34,24 @@ fn bench_compare(c: &mut Criterion) {
     c.bench_function("pseudo_jaro_winkler", |b| b.iter(|| {
         pseudo_jaro_winkler(black_box(&query_names), black_box(&candidate_names),PathBuf::from("./tests/output/"), 0.8);
     }));
+    c.bench_function("strsim_jaro_winkler", |b| b.iter(|| {
+        strsim_jaro_winkler(black_box(&query_names), black_box(&candidate_names),PathBuf::from("./tests/output/"), 0.8);
+    }));
+    c.bench_function("rapidfuzz_jaro_winkler", |b| b.iter(|| {
+        rapidfuzz_jaro_winkler(black_box(&query_names), black_box(&candidate_names),PathBuf::from("./tests/output/"), 0.8);
+    }));
+    c.bench_function("eddie_jaro_winkler", |b| b.iter(|| {
+        eddie_jaro_winkler(black_box(&query_names), black_box(&candidate_names),PathBuf::from("./tests/output/"), 0.8);
+    }));
 }
+
+
+
 
 criterion_group!{
     name = benches;
     config = Criterion::default().warm_up_time(Duration::new(1,0)).measurement_time(Duration::new(1, 0)).sample_size(10);
     targets = bench_compare
 }
+
 criterion_main!(benches);
